@@ -1,0 +1,616 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>str:d — Running Archive</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+:root{
+  --lime:#C8FF00;
+  --lime-dim:rgba(200,255,0,0.20);
+  --lime-glow:rgba(200,255,0,0.30);
+  --bg:#EDEDED;
+  --surface:#E4E4E4;
+  --card:#F7F7F7;
+  --card-2:#DEDEDE;
+  --border:rgba(0,0,0,0.08);
+  --text:rgba(0,0,0,0.80);
+  --text-sub:rgba(0,0,0,0.40);
+  --text-muted:rgba(0,0,0,0.22);
+  --gray:#999;
+  --r:16px;
+}
+body{
+  font-family:-apple-system,'SF Pro Display','Pretendard',sans-serif;
+  background:#C8C8C8;min-height:100vh;display:flex;flex-direction:column;
+  align-items:center;padding:24px 16px 40px;
+}
+.frame-label{
+  font-size:11px;font-weight:700;letter-spacing:0.14em;text-transform:uppercase;
+  color:var(--lime);background:rgba(200,255,0,0.15);border-radius:20px;
+  padding:4px 14px;margin-bottom:14px;
+}
+.phone{
+  width:390px;background:var(--bg);border-radius:50px;
+  box-shadow:0 30px 80px rgba(0,0,0,0.25),0 0 0 1px rgba(0,0,0,0.10);
+  position:relative;overflow:hidden;
+}
+.status-bar{
+  height:44px;display:flex;align-items:center;justify-content:space-between;
+  padding:0 28px;background:var(--bg);position:relative;z-index:10;
+}
+.status-bar .time{font-size:15px;font-weight:700;color:var(--text);letter-spacing:-0.2px}
+.status-bar .icons{display:flex;gap:5px;align-items:center;font-size:12px;color:var(--text-sub);font-weight:600}
+.screen{
+  display:none;width:390px;height:calc(844px - 44px);
+  overflow-y:auto;overflow-x:hidden;background:var(--bg);
+  -webkit-overflow-scrolling:touch;
+}
+.screen.active{display:block}
+.screen::-webkit-scrollbar{display:none}
+.bottom-nav{display:none}
+
+/* ══════════════ CALENDAR ══════════════ */
+.cal-header{padding:16px 20px 8px}
+.cal-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px}
+.app-logo{
+  font-size:28px;font-weight:900;color:var(--lime);
+  letter-spacing:-0.03em;line-height:1;
+}
+.cal-gear{
+  width:32px;height:32px;border-radius:50%;background:var(--card);
+  display:flex;align-items:center;justify-content:center;font-size:14px;
+  color:var(--text-sub);cursor:pointer;border:1px solid var(--border);
+}
+.cal-month-row{display:flex;align-items:center;justify-content:space-between;margin-bottom:4px}
+.cal-month-left{}
+.cal-month-label{font-size:11px;font-weight:700;color:var(--text-muted);letter-spacing:0.10em;text-transform:uppercase;margin-bottom:4px}
+.cal-km-big{font-size:48px;font-weight:900;color:var(--text);letter-spacing:-0.05em;line-height:1}
+.cal-km-unit{font-size:20px;font-weight:700;color:var(--text-sub);margin-left:3px}
+.cal-nav{display:flex;gap:6px}
+.cal-nav-btn{
+  width:30px;height:30px;border-radius:50%;background:var(--card);
+  border:1px solid var(--border);display:flex;align-items:center;justify-content:center;
+  font-size:14px;font-weight:700;color:var(--text-sub);cursor:pointer;transition:all .15s;
+}
+.cal-nav-btn:active{background:var(--card-2);color:var(--text)}
+
+.cal-weekdays{display:grid;grid-template-columns:repeat(7,1fr);padding:8px 0 3px}
+.cal-wday{text-align:center;font-size:9px;font-weight:700;color:var(--text-muted);letter-spacing:0.08em}
+.cal-grid{display:grid;grid-template-columns:repeat(7,1fr);padding:0;gap:0}
+.cal-cell{
+  display:flex;align-items:center;justify-content:center;
+  aspect-ratio:1/1;cursor:default;position:relative;
+}
+.cal-cell.has-run{cursor:pointer}
+.cal-cell.has-run:active{opacity:0.65}
+
+/* ── Bottom Sheet ── */
+.sheet-overlay{
+  position:absolute;inset:0;z-index:50;background:rgba(0,0,0,0.4);
+  opacity:0;pointer-events:none;transition:opacity .25s;
+}
+.sheet-overlay.open{opacity:1;pointer-events:all}
+.run-sheet{
+  position:absolute;bottom:0;left:0;right:0;background:var(--card);
+  border-radius:24px 24px 0 0;padding-bottom:28px;
+  transform:translateY(100%);transition:transform .32s cubic-bezier(.16,1,.3,1);z-index:51;
+}
+.sheet-overlay.open .run-sheet{transform:translateY(0)}
+.sheet-handle{width:36px;height:4px;background:var(--card-2);border-radius:2px;margin:12px auto 18px}
+.sheet-type-badge{text-align:center;margin-bottom:6px;}
+.sheet-type-pill{
+  display:inline-block;padding:4px 14px;border-radius:100px;
+  font-size:10px;font-weight:800;letter-spacing:0.1em;text-transform:uppercase;
+}
+.sheet-km{text-align:center;font-size:58px;font-weight:900;color:var(--text);letter-spacing:-0.06em;line-height:1}
+.sheet-km span{font-size:22px;font-weight:600;color:var(--text-sub)}
+.sheet-place{text-align:center;font-size:11px;font-weight:600;color:var(--text-muted);margin-top:4px;margin-bottom:16px}
+.sheet-stats{display:flex;border-top:1px solid var(--border);border-bottom:1px solid var(--border);margin-bottom:16px}
+.sheet-stat{flex:1;padding:12px 0;text-align:center;border-right:1px solid var(--border)}
+.sheet-stat:last-child{border-right:none}
+.ss-val{font-size:17px;font-weight:800;color:var(--text);letter-spacing:-0.02em}
+.ss-lbl{font-size:9px;font-weight:700;color:var(--text-muted);letter-spacing:0.1em;text-transform:uppercase;margin-top:2px}
+.sheet-detail-btn{
+  margin:0 20px;background:var(--lime);color:#000;
+  font-size:15px;font-weight:800;text-align:center;padding:14px;
+  border-radius:14px;cursor:pointer;transition:opacity .15s;letter-spacing:-0.02em;
+}
+.sheet-detail-btn:active{opacity:0.85}
+
+/* ══════════════ LIST ══════════════ */
+.list-header{padding:16px 20px 12px;border-bottom:1px solid var(--border)}
+.list-logo{font-size:14px;font-weight:900;color:var(--lime);letter-spacing:-0.02em;margin-bottom:12px}
+.list-total-row{display:flex;align-items:baseline;gap:4px;margin-bottom:2px}
+.list-total-num{font-size:48px;font-weight:900;color:var(--text);letter-spacing:-0.07em;line-height:1}
+.list-total-unit{font-size:18px;font-weight:700;color:var(--text-sub)}
+.list-total-sub{font-size:11px;font-weight:600;color:var(--text-muted);margin-bottom:10px}
+.filter-chips{display:flex;gap:6px;overflow-x:auto;padding-bottom:2px}
+.filter-chips::-webkit-scrollbar{display:none}
+.chip{flex-shrink:0;padding:5px 13px;border-radius:100px;font-size:11px;font-weight:700;cursor:pointer;transition:all .15s}
+.chip.active{background:var(--lime);color:#000}
+.chip.inactive{background:var(--card);color:var(--text-sub);border:1px solid var(--border)}
+.sort-row{display:flex;align-items:center;justify-content:space-between;padding:8px 20px;border-bottom:1px solid var(--border);background:var(--surface)}
+.sort-label{font-size:11px;font-weight:600;color:var(--text-muted)}
+.sort-btn{font-size:12px;font-weight:700;color:var(--lime);cursor:pointer}
+.month-divider{padding:10px 20px 5px;font-size:10px;font-weight:800;color:var(--text-muted);letter-spacing:0.12em;text-transform:uppercase;background:var(--bg);border-top:1px solid var(--border)}
+.run-item{
+  display:flex;align-items:center;gap:14px;padding:13px 20px;
+  border-bottom:1px solid var(--border);background:var(--card);
+  cursor:pointer;transition:background .1s;
+}
+.run-item:active{background:var(--surface)}
+.ri-dot{width:40px;height:40px;flex-shrink:0;display:flex;align-items:center;justify-content:center}
+.ri-body{flex:1;min-width:0}
+.ri-date{font-size:10px;font-weight:700;color:var(--text-muted);letter-spacing:0.08em;text-transform:uppercase;margin-bottom:2px}
+.ri-km{font-size:22px;font-weight:900;color:var(--text);letter-spacing:-0.04em;line-height:1}
+.ri-km span{font-size:12px;font-weight:600;color:var(--text-sub)}
+.ri-meta{display:flex;gap:8px;align-items:center;margin-top:2px}
+.ri-pace{font-size:12px;font-weight:800;color:var(--text);font-variant-numeric:tabular-nums}
+.ri-sep{width:3px;height:3px;border-radius:50%;background:var(--text-muted)}
+.ri-time,.ri-hr{font-size:12px;font-weight:500;color:var(--text-sub)}
+.ri-badge{flex-shrink:0;font-size:9px;font-weight:800;color:#000;background:var(--lime);padding:3px 8px;border-radius:20px;letter-spacing:0.04em}
+
+/* ══════════════ DETAIL ══════════════ */
+.det-topbar{display:flex;align-items:center;justify-content:space-between;padding:12px 16px}
+.det-back{width:36px;height:36px;border-radius:50%;background:var(--card);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:20px;color:var(--text-sub);cursor:pointer}
+.det-acts{display:flex;gap:8px}
+.det-act{height:34px;padding:0 13px;border-radius:100px;background:var(--card);border:1px solid var(--border);display:flex;align-items:center;gap:4px;font-size:12px;font-weight:700;color:var(--text-sub);cursor:pointer}
+.det-hero{padding:4px 20px 18px}
+.det-type-pill{display:inline-block;padding:3px 12px;border-radius:100px;font-size:10px;font-weight:800;letter-spacing:0.1em;text-transform:uppercase;margin-bottom:6px}
+.det-date{font-size:10px;font-weight:700;color:var(--text-muted);letter-spacing:0.12em;text-transform:uppercase;margin-bottom:4px}
+.det-big-km{font-size:72px;font-weight:900;color:var(--text);letter-spacing:-0.06em;line-height:0.88}
+.det-big-km span{font-size:28px;font-weight:700;color:var(--text-sub)}
+.det-sub-row{display:flex;gap:18px;margin-top:10px}
+.det-sub-val{font-size:20px;font-weight:800;color:var(--text);letter-spacing:-0.02em}
+.det-sub-unit{font-size:11px;font-weight:600;color:var(--text-sub);margin-left:2px}
+.det-env{display:flex;gap:6px;margin-top:8px;font-size:12px;font-weight:600;color:var(--text-muted)}
+.det-block{background:var(--card);border-radius:var(--r);margin:8px 14px;overflow:hidden;border:1px solid var(--border)}
+.det-block-ttl{font-size:9px;font-weight:800;color:var(--text-muted);letter-spacing:0.14em;text-transform:uppercase;padding:12px 16px 6px}
+.m-grid{display:grid;grid-template-columns:1fr 1fr;border-top:1px solid var(--border)}
+.m-item{padding:12px 16px;border-bottom:1px solid var(--border);border-right:1px solid var(--border)}
+.m-item:nth-child(2n){border-right:none}
+.m-item:nth-last-child(-n+2){border-bottom:none}
+.m-label{font-size:9px;font-weight:800;color:var(--text-muted);letter-spacing:0.1em;text-transform:uppercase;margin-bottom:3px}
+.m-val{font-size:22px;font-weight:900;color:var(--text);letter-spacing:-0.03em;line-height:1}
+.m-val .u{font-size:11px;font-weight:600;color:var(--text-sub)}
+.m-val.lime{color:var(--lime)}
+.m-sub{font-size:10px;font-weight:500;color:var(--text-muted);margin-top:2px}
+.pace-block{padding:12px 16px 16px;border-top:1px solid var(--border)}
+.pb-row{display:flex;align-items:center;gap:8px;margin-bottom:5px}
+.pb-km{font-size:9px;font-weight:700;color:var(--text-muted);width:22px;text-align:right;flex-shrink:0}
+.pb-track{flex:1;height:9px;background:var(--card-2);border-radius:5px;overflow:hidden}
+.pb-fill{height:100%;border-radius:5px;background:var(--lime)}
+.pb-val{font-size:9px;font-weight:700;color:var(--text);font-variant-numeric:tabular-nums;width:34px;flex-shrink:0}
+
+/* ══════════════ GROWTH ══════════════ */
+.g-header{padding:16px 20px 12px;border-bottom:1px solid var(--border)}
+.g-hero{display:flex;align-items:flex-end;justify-content:space-between}
+.g-title{font-size:24px;font-weight:900;color:var(--text);letter-spacing:-0.04em}
+.g-sub{font-size:12px;color:var(--text-sub);margin-top:3px}
+.g-total-num{font-size:32px;font-weight:900;color:var(--lime);letter-spacing:-0.06em;line-height:1}
+.g-total-unit{font-size:13px;font-weight:600;color:var(--text-sub)}
+.g-total-lbl{font-size:9px;font-weight:700;color:var(--text-muted);letter-spacing:0.1em;text-transform:uppercase;margin-top:1px;text-align:right}
+.g-tabs{display:flex;padding:12px 20px 0;border-bottom:1px solid var(--border)}
+.gtab{padding:8px 16px 10px;font-size:13px;font-weight:700;color:var(--text-muted);cursor:pointer;position:relative;transition:color .15s}
+.gtab.active{color:var(--text)}
+.gtab.active::after{content:'';position:absolute;bottom:0;left:16px;right:16px;height:2.5px;background:var(--lime);border-radius:2px 2px 0 0}
+.g-stat-row{display:flex;background:var(--surface);border-bottom:1px solid var(--border)}
+.g-stat-item{flex:1;padding:14px 0;text-align:center;border-right:1px solid var(--border)}
+.g-stat-item:last-child{border-right:none}
+.gs-val{font-size:20px;font-weight:900;color:var(--text);letter-spacing:-0.04em}
+.gs-val .u{font-size:11px;font-weight:600;color:var(--text-sub)}
+.gs-val.lime{color:var(--lime)}
+.gs-lbl{font-size:9px;font-weight:700;color:var(--text-muted);letter-spacing:0.08em;text-transform:uppercase;margin-top:2px}
+.ch-card{background:var(--card);border-radius:var(--r);margin:10px 14px 0;overflow:hidden;border:1px solid var(--border)}
+.ch-hd{padding:14px 16px 0}
+.ch-title{font-size:13px;font-weight:800;color:var(--text)}
+.ch-sub{font-size:10px;font-weight:500;color:var(--text-muted);margin-top:2px}
+.ch-area{padding:10px 14px 14px}
+.ch-svg{width:100%;overflow:visible}
+.ms-card{margin:10px 14px 0;background:var(--lime);border-radius:var(--r);padding:16px 18px;overflow:hidden;position:relative}
+.ms-lbl{font-size:9px;font-weight:800;color:rgba(0,0,0,0.45);letter-spacing:0.12em;text-transform:uppercase;margin-bottom:3px}
+.ms-num{font-size:40px;font-weight:900;color:#000;letter-spacing:-0.06em;line-height:1}
+.ms-num span{font-size:17px;font-weight:600;color:rgba(0,0,0,0.5)}
+.ms-next{font-size:11px;font-weight:600;color:rgba(0,0,0,0.5);margin-top:4px}
+.ms-bar{height:4px;background:rgba(0,0,0,0.12);border-radius:2px;margin-top:12px;overflow:hidden}
+.ms-bar-fill{height:100%;background:rgba(0,0,0,0.45);border-radius:2px}
+.ms-bg{position:absolute;right:-8px;top:-8px;font-size:88px;font-weight:900;color:rgba(0,0,0,0.06);letter-spacing:-0.06em;line-height:1;pointer-events:none}
+.spacer{height:20px}
+</style>
+</head>
+<body>
+<div class="frame-label">str:d — running archive v3</div>
+<div class="phone">
+<div class="status-bar">
+  <span class="time">9:41</span>
+  <div class="icons"><span>▲▲▲</span> <span>100%</span></div>
+</div>
+
+<!-- ═══════════ CALENDAR ═══════════ -->
+<div class="screen active" id="screen-cal">
+  <div class="cal-header">
+    <div class="cal-top">
+      <div class="app-logo">str:d</div>
+      <div class="cal-gear">⚙</div>
+    </div>
+    <div class="cal-month-row">
+      <div class="cal-month-left">
+        <div class="cal-month-label"><span id="cal-mname">MARCH</span> <span id="cal-yname">2026</span></div>
+        <div class="cal-km-big"><span id="cs-km">90.5</span><span class="cal-km-unit">km</span></div>
+      </div>
+      <div class="cal-nav">
+        <div class="cal-nav-btn" onclick="calNav(-1)">‹</div>
+        <div class="cal-nav-btn" onclick="calNav(1)">›</div>
+      </div>
+    </div>
+  </div>
+  <div class="cal-weekdays">
+    <div class="cal-wday">M</div><div class="cal-wday">T</div><div class="cal-wday">W</div>
+    <div class="cal-wday">T</div><div class="cal-wday">F</div><div class="cal-wday">S</div><div class="cal-wday">S</div>
+  </div>
+  <div class="cal-grid" id="cal-grid"></div>
+</div>
+
+<!-- ═══════════ LIST ═══════════ -->
+<div class="screen" id="screen-list">
+  <div class="list-header">
+    <div class="list-logo">str:d</div>
+    <div class="list-total-row">
+      <div class="list-total-num">1,191</div>
+      <div class="list-total-unit">km</div>
+    </div>
+    <div class="list-total-sub">총 누적 거리 · 159회 · 10개월</div>
+    <div class="filter-chips">
+      <div class="chip active">전체</div>
+      <div class="chip inactive">5K+</div>
+      <div class="chip inactive">10K+</div>
+      <div class="chip inactive">하프+</div>
+    </div>
+  </div>
+  <div class="sort-row">
+    <span class="sort-label">159개 러닝</span>
+    <div class="sort-btn">최신순 ↕</div>
+  </div>
+  <div class="month-divider">MAR 2026 · 90.5km</div>
+  <div id="list-runs"></div>
+  <div class="month-divider">FEB 2026 · 128.1km</div>
+  <div class="run-item" onclick="switchScreen('detail')">
+    <div class="ri-dot"><svg width="40" height="40"><circle cx="20" cy="20" r="16" fill="#C4C4C4"/><text x="20" y="20" text-anchor="middle" dominant-baseline="central" fill="#000" font-size="11" font-weight="800" opacity="0.5">15</text></svg></div>
+    <div class="ri-body"><div class="ri-date">FEB 01</div><div class="ri-km">15.19<span> km</span></div><div class="ri-meta"><span class="ri-pace">5'59/km</span><span class="ri-sep"></span><span class="ri-time">1:30:53</span></div></div>
+    <span class="ri-badge">LONG</span>
+  </div>
+  <div class="run-item" onclick="switchScreen('detail')">
+    <div class="ri-dot"><svg width="40" height="40"><circle cx="20" cy="20" r="16" fill="#111111"/><text x="20" y="20" text-anchor="middle" dominant-baseline="central" fill="#fff" font-size="11" font-weight="800" opacity="0.55">10</text></svg></div>
+    <div class="ri-body"><div class="ri-date">FEB 13</div><div class="ri-km">10.16<span> km</span></div><div class="ri-meta"><span class="ri-pace">5'54/km</span><span class="ri-sep"></span><span class="ri-time">59:58</span></div></div>
+    <span class="ri-badge">TEMPO</span>
+  </div>
+  <div class="spacer"></div>
+</div>
+
+<!-- ═══════════ DETAIL ═══════════ -->
+<div class="screen" id="screen-detail">
+  <div class="det-topbar">
+    <div class="det-back" onclick="switchScreen('cal')">‹</div>
+    <div class="det-acts"><div class="det-act">📷</div><div class="det-act">↑ 공유</div></div>
+  </div>
+  <div class="det-hero">
+    <div class="det-type-pill" style="background:var(--lime);color:#000">LONG</div>
+    <div class="det-date">2026.3.22 SUN · AM 7:30</div>
+    <div class="det-big-km">21.27<span> km</span></div>
+    <div class="det-sub-row">
+      <div><span class="det-sub-val">1:51:23</span><span class="det-sub-unit">시간</span></div>
+      <div><span class="det-sub-val">158</span><span class="det-sub-unit">bpm</span></div>
+    </div>
+    <div class="det-env">🌤 14°C · 습도 48% · 청라호수공원</div>
+  </div>
+  <div class="det-block">
+    <div class="det-block-ttl">러닝 지표</div>
+    <div class="m-grid">
+      <div class="m-item"><div class="m-label">평균 페이스</div><div class="m-val">5'14<span class="u">/km</span></div><div class="m-sub">최고 5'06 · 최저 5'41</div></div>
+      <div class="m-item"><div class="m-label">케이던스</div><div class="m-val">176<span class="u">spm</span></div><div class="m-sub">최대 186spm</div></div>
+      <div class="m-item"><div class="m-label">젖산역치</div><div class="m-val lime">162<span class="u">bpm</span></div><div class="m-sub">5'10/km 도달</div></div>
+      <div class="m-item"><div class="m-label">VO2max</div><div class="m-val lime">45<span class="u">ml/kg</span></div><div class="m-sub">좋음 ↑</div></div>
+    </div>
+  </div>
+  <div class="det-block">
+    <div class="det-block-ttl">구간별 페이스</div>
+    <div class="pace-block">
+      <div class="pb-row"><span class="pb-km">1k</span><div class="pb-track"><div class="pb-fill" style="width:62%"></div></div><span class="pb-val">5'41</span></div>
+      <div class="pb-row"><span class="pb-km">5k</span><div class="pb-track"><div class="pb-fill" style="width:85%"></div></div><span class="pb-val">5'15</span></div>
+      <div class="pb-row"><span class="pb-km">10k</span><div class="pb-track"><div class="pb-fill" style="width:88%"></div></div><span class="pb-val">5'12</span></div>
+      <div class="pb-row"><span class="pb-km">15k</span><div class="pb-track"><div class="pb-fill" style="width:84%"></div></div><span class="pb-val">5'22</span></div>
+      <div class="pb-row"><span class="pb-km">20k</span><div class="pb-track"><div class="pb-fill" style="width:86%"></div></div><span class="pb-val">5'16</span></div>
+      <div class="pb-row"><span class="pb-km">+1</span><div class="pb-track"><div class="pb-fill" style="width:92%"></div></div><span class="pb-val">5'06</span></div>
+    </div>
+  </div>
+  <div class="det-block">
+    <div class="det-block-ttl">신체 데이터</div>
+    <div class="m-grid">
+      <div class="m-item"><div class="m-label">몸무게</div><div class="m-val">72.1<span class="u">kg</span></div></div>
+      <div class="m-item"><div class="m-label">체지방율</div><div class="m-val">18.8<span class="u">%</span></div></div>
+      <div class="m-item"><div class="m-label">전날 수면</div><div class="m-val lime">7.4<span class="u">h</span></div><div class="m-sub">수면 품질 좋음</div></div>
+      <div class="m-item"><div class="m-label">당일 수면</div><div class="m-val" style="font-size:14px;color:var(--text-muted)">—</div><div class="m-sub">기록 대기</div></div>
+    </div>
+  </div>
+  <div class="spacer"></div>
+</div>
+
+<!-- ═══════════ GROWTH ═══════════ -->
+<div class="screen" id="screen-growth">
+  <div class="g-header">
+    <div class="g-hero">
+      <div><div class="g-title">성장 기록</div><div class="g-sub">10개월째 달리는 중</div></div>
+      <div style="text-align:right"><div class="g-total-lbl">총 누적</div><div class="g-total-num">1,191<span class="g-total-unit">km</span></div></div>
+    </div>
+  </div>
+  <div class="g-tabs">
+    <div class="gtab active" id="gt-w" onclick="switchGTab('w')">주간</div>
+    <div class="gtab" id="gt-m" onclick="switchGTab('m')">월간</div>
+  </div>
+  <div id="gv-w">
+    <div class="g-stat-row">
+      <div class="g-stat-item"><div class="gs-val lime">5.4<span class="u">km</span></div><div class="gs-lbl">이번 주</div></div>
+      <div class="g-stat-item"><div class="gs-val">22.1<span class="u">km</span></div><div class="gs-lbl">주간 평균</div></div>
+      <div class="g-stat-item"><div class="gs-val">1<span class="u">회</span></div><div class="gs-lbl">이번 주</div></div>
+    </div>
+    <div class="ch-card">
+      <div class="ch-hd"><div class="ch-title">주간 마일리지</div><div class="ch-sub">최근 16주 · 실제 기록</div></div>
+      <div class="ch-area">
+        <svg class="ch-svg" viewBox="0 0 350 120" height="120">
+          <line x1="22" y1="18.2" x2="342" y2="18.2" stroke="rgba(0,0,0,0.08)" stroke-width="0.8"/>
+          <line x1="22" y1="38.7" x2="342" y2="38.7" stroke="rgba(0,0,0,0.08)" stroke-width="0.8"/>
+          <line x1="22" y1="59.1" x2="342" y2="59.1" stroke="rgba(0,0,0,0.08)" stroke-width="0.8"/>
+          <line x1="22" y1="79.6" x2="342" y2="79.6" stroke="rgba(0,0,0,0.08)" stroke-width="0.8"/>
+          <text x="20" y="21" font-size="7" fill="rgba(0,0,0,0.28)" text-anchor="end">40</text>
+          <text x="20" y="42" font-size="7" fill="rgba(0,0,0,0.28)" text-anchor="end">30</text>
+          <text x="20" y="62" font-size="7" fill="rgba(0,0,0,0.28)" text-anchor="end">20</text>
+          <text x="20" y="83" font-size="7" fill="rgba(0,0,0,0.28)" text-anchor="end">10</text>
+          <line x1="22" y1="54.8" x2="342" y2="54.8" stroke="#C8FF00" stroke-width="0.8" stroke-dasharray="3 3" opacity="0.5"/>
+          <rect x="25"  y="48.9" width="14" height="51.1" rx="2" fill="#C8FF00" opacity="0.3"/>
+          <rect x="45"  y="50.9" width="14" height="49.1" rx="2" fill="#C8FF00" opacity="0.3"/>
+          <rect x="65"  y="58.5" width="14" height="41.5" rx="2" fill="#C8FF00" opacity="0.3"/>
+          <rect x="85"  y="36.8" width="14" height="63.2" rx="2" fill="#C8FF00" opacity="0.3"/>
+          <rect x="105" y="34.0" width="14" height="66.0" rx="2" fill="#C8FF00" opacity="0.3"/>
+          <rect x="125" y="36.6" width="14" height="63.4" rx="2" fill="#C8FF00" opacity="0.3"/>
+          <rect x="145" y="53.0" width="14" height="47.0" rx="2" fill="#C8FF00" opacity="0.3"/>
+          <rect x="165" y="36.6" width="14" height="63.4" rx="2" fill="#C8FF00" opacity="0.3"/>
+          <rect x="185" y="68.7" width="14" height="31.3" rx="2" fill="#C8FF00" opacity="0.3"/>
+          <rect x="205" y="30.5" width="14" height="69.5" rx="2" fill="#C8FF00" opacity="0.3"/>
+          <rect x="225" y="25.2" width="14" height="74.8" rx="2" fill="#C8FF00" opacity="0.3"/>
+          <rect x="245" y="44.8" width="14" height="55.2" rx="2" fill="#C8FF00" opacity="0.3"/>
+          <rect x="265" y="17.9" width="14" height="82.1" rx="2" fill="#C8FF00" opacity="0.85"/>
+          <text x="272" y="14.5" font-size="6.5" fill="#C8FF00" text-anchor="middle" font-weight="700">40.2</text>
+          <rect x="285" y="81.0" width="14" height="19.0" rx="2" fill="#C8FF00" opacity="0.3"/>
+          <rect x="305" y="27.4" width="14" height="72.6" rx="2" fill="#C8FF00" opacity="0.3"/>
+          <rect x="325" y="89.0" width="14" height="11.0" rx="2" fill="#C8FF00" opacity="0.7"/>
+          <text x="332" y="85.5" font-size="6.5" fill="#C8FF00" text-anchor="middle" font-weight="700">5.4</text>
+          <line x1="22" y1="100" x2="342" y2="100" stroke="rgba(0,0,0,0.08)" stroke-width="0.8"/>
+          <text x="32"  y="113" font-size="7" fill="rgba(0,0,0,0.28)" text-anchor="middle">12/08</text>
+          <text x="112" y="113" font-size="7" fill="rgba(0,0,0,0.28)" text-anchor="middle">1/05</text>
+          <text x="192" y="113" font-size="7" fill="rgba(0,0,0,0.28)" text-anchor="middle">2/02</text>
+          <text x="272" y="113" font-size="7" fill="#C8FF00" text-anchor="middle" font-weight="700" opacity="0.8">3/02</text>
+          <text x="332" y="113" font-size="7" fill="#C8FF00" text-anchor="middle" font-weight="700" opacity="0.8">3/23</text>
+        </svg>
+      </div>
+    </div>
+    <div class="ms-card">
+      <div class="ms-bg">1500</div>
+      <div class="ms-lbl">다음 마일스톤</div>
+      <div class="ms-num">1,191<span> km</span></div>
+      <div class="ms-next">1,500km까지 309km 남음</div>
+      <div class="ms-bar"><div class="ms-bar-fill" style="width:79.4%"></div></div>
+    </div>
+    <div class="spacer"></div>
+  </div>
+  <div id="gv-m" style="display:none">
+    <div class="g-stat-row">
+      <div class="g-stat-item"><div class="gs-val lime">90.5<span class="u">km</span></div><div class="gs-lbl">이번 달</div></div>
+      <div class="g-stat-item"><div class="gs-val">6'05<span class="u">/km</span></div><div class="gs-lbl">평균 페이스</div></div>
+      <div class="g-stat-item"><div class="gs-val">10<span class="u">회</span></div><div class="gs-lbl">러닝 횟수</div></div>
+    </div>
+    <div class="ch-card">
+      <div class="ch-hd"><div class="ch-title">월별 누적 거리</div><div class="ch-sub">2025.5 – 2026.3 · 실제 기록</div></div>
+      <div class="ch-area">
+        <svg class="ch-svg" viewBox="0 0 330 100" height="100">
+          <line x1="26" y1="28" x2="322" y2="28" stroke="rgba(0,0,0,0.08)" stroke-width="0.8"/>
+          <line x1="26" y1="53" x2="322" y2="53" stroke="rgba(0,0,0,0.08)" stroke-width="0.8"/>
+          <text x="24" y="31" font-size="7" fill="rgba(0,0,0,0.28)" text-anchor="end">100</text>
+          <text x="24" y="56" font-size="7" fill="rgba(0,0,0,0.28)" text-anchor="end">50</text>
+          <rect x="31"  y="25.6" width="18" height="52.4" rx="2" fill="#C8FF00" opacity="0.3"/>
+          <rect x="58"  y="18.7" width="18" height="59.3" rx="2" fill="#C8FF00" opacity="0.3"/>
+          <rect x="85"  y="25.6" width="18" height="52.4" rx="2" fill="#C8FF00" opacity="0.3"/>
+          <rect x="112" y="23.5" width="18" height="54.5" rx="2" fill="#C8FF00" opacity="0.3"/>
+          <rect x="139" y="31.8" width="18" height="46.2" rx="2" fill="#C8FF00" opacity="0.3"/>
+          <rect x="166" y="34.8" width="18" height="43.2" rx="2" fill="#C8FF00" opacity="0.3"/>
+          <rect x="193" y="41.9" width="18" height="36.1" rx="2" fill="#C8FF00" opacity="0.3"/>
+          <rect x="220" y="33.3" width="18" height="44.8" rx="2" fill="#C8FF00" opacity="0.3"/>
+          <rect x="247" y="11.4" width="18" height="66.6" rx="2" fill="#C8FF00" opacity="0.85"/>
+          <text x="256" y="8.5" font-size="6.5" fill="#C8FF00" text-anchor="middle" font-weight="700">133</text>
+          <rect x="274" y="13.9" width="18" height="64.1" rx="2" fill="#C8FF00" opacity="0.3"/>
+          <rect x="301" y="32.8" width="18" height="45.3" rx="2" fill="#C8FF00" opacity="0.7"/>
+          <line x1="26" y1="78" x2="322" y2="78" stroke="rgba(0,0,0,0.08)" stroke-width="0.8"/>
+          <text x="40"  y="91" font-size="7" fill="rgba(0,0,0,0.28)" text-anchor="middle">5월</text>
+          <text x="94"  y="91" font-size="7" fill="rgba(0,0,0,0.28)" text-anchor="middle">7월</text>
+          <text x="148" y="91" font-size="7" fill="rgba(0,0,0,0.28)" text-anchor="middle">9월</text>
+          <text x="202" y="91" font-size="7" fill="rgba(0,0,0,0.28)" text-anchor="middle">11월</text>
+          <text x="256" y="91" font-size="7" fill="#C8FF00" text-anchor="middle" font-weight="700" opacity="0.8">1월</text>
+          <text x="310" y="91" font-size="7" fill="#C8FF00" text-anchor="middle" font-weight="700" opacity="0.8">3월</text>
+        </svg>
+      </div>
+    </div>
+    <div class="spacer"></div>
+  </div>
+</div>
+
+<nav class="bottom-nav"></nav>
+</div>
+
+<script>
+const TS = {
+  tt:       {fill:'#111111',stroke:'none',tc:'#C8FF00',to:1},
+  tempo:    {fill:'#111111',stroke:'none',tc:'#FFFFFF',to:0.55},
+  interval: {fill:'#C8FF00',stroke:'none',tc:'#000000',to:1},
+  easy:     {fill:'#C8FF00',stroke:'none',tc:'#FFFFFF',to:1},
+  recovery: {fill:'#666666',stroke:'none',tc:'#FFFFFF',to:0.6},
+  long:     {fill:'#C4C4C4',stroke:'none',tc:'#000000',to:0.5},
+  nothing:  {fill:'none',stroke:'rgba(0,0,0,0.15)',tc:'none',to:0},
+};
+
+const TYPE_LABELS = {tt:'TT',tempo:'TEMPO',interval:'INTERVAL',easy:'EASY',recovery:'RECOVERY',long:'LONG'};
+const TYPE_PILL = {
+  tt:{bg:'#111',color:'#C8FF00',border:'none'},
+  tempo:{bg:'#111',color:'#fff',border:'none'},
+  interval:{bg:'#C8FF00',color:'#000',border:'none'},
+  easy:{bg:'#C8FF00',color:'#000',border:'none'},
+  recovery:{bg:'#666',color:'#fff',border:'none'},
+  long:{bg:'#C4C4C4',color:'#000',border:'none'},
+};
+
+const MNAMES = ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
+const MMETA = {
+  '2026-01':{km:102.4,cnt:'13회'},
+  '2026-02':{km:128.1,cnt:'16회'},
+  '2026-03':{km:90.5,cnt:'10회'},
+};
+
+const D = {
+  '2026-01-01':{km:13.01,pace:"6'24",hr:160,time:'1:23:13',type:'easy'},
+  '2026-01-02':{km:8.01,pace:"6'46",hr:148,time:'54:13',type:'easy'},
+  '2026-01-03':{km:5.02,pace:"4'52",hr:172,time:'24:26',type:'tt'},
+  '2026-01-05':{km:5.53,pace:"6'21",hr:156,time:'35:05',type:'easy'},
+  '2026-01-07':{km:5.75,pace:"6'36",hr:150,time:'37:58',type:'recovery'},
+  '2026-01-09':{km:8.53,pace:"6'32",hr:148,time:'55:44',type:'easy'},
+  '2026-01-11':{km:12.51,pace:"5'35",hr:168,time:'1:09:50',type:'tempo'},
+  '2026-01-13':{km:5.19,pace:"6'18",hr:153,time:'32:44',type:'easy'},
+  '2026-01-15':{km:5.01,pace:"4'48",hr:175,time:'24:02',type:'tt'},
+  '2026-01-17':{km:6.02,pace:"6'28",hr:151,time:'38:56',type:'easy'},
+  '2026-01-19':{km:10.03,pace:"5'42",hr:165,time:'57:12',type:'tempo'},
+  '2026-01-21':{km:5.58,pace:"6'40",hr:147,time:'37:13',type:'recovery'},
+  '2026-01-23':{km:7.15,pace:"6'10",hr:158,time:'44:08',type:'easy'},
+  '2026-02-01':{km:15.19,pace:"5'59",hr:155,time:'1:30:53',type:'long'},
+  '2026-02-03':{km:5.34,pace:"6'25",hr:152,time:'34:17',type:'easy'},
+  '2026-02-05':{km:5.07,pace:"4'55",hr:174,time:'24:58',type:'tt'},
+  '2026-02-07':{km:8.11,pace:"6'18",hr:153,time:'51:06',type:'easy'},
+  '2026-02-09':{km:0.8,pace:"4'10",hr:178,time:'3:20',type:'interval'},
+  '2026-02-11':{km:6.44,pace:"6'30",hr:149,time:'41:53',type:'recovery'},
+  '2026-02-13':{km:10.16,pace:"5'54",hr:162,time:'59:58',type:'tempo'},
+  '2026-02-15':{km:5.61,pace:"6'12",hr:155,time:'34:51',type:'easy'},
+  '2026-02-17':{km:18.02,pace:"5'55",hr:157,time:'1:46:44',type:'long'},
+  '2026-02-19':{km:5.03,pace:"4'50",hr:176,time:'24:15',type:'tt'},
+  '2026-02-21':{km:7.22,pace:"6'22",hr:151,time:'46:01',type:'easy'},
+  '2026-02-23':{km:0.4,pace:"3'58",hr:182,time:'1:35',type:'interval'},
+  '2026-02-25':{km:10.55,pace:"5'48",hr:163,time:'1:01:14',type:'tempo'},
+  '2026-02-27':{km:5.8,pace:"6'35",hr:148,time:'38:13',type:'recovery'},
+  '2026-03-01':{km:5.41,pace:"6'08",hr:154,time:'33:07',type:'easy'},
+  '2026-03-03':{km:5.02,pace:"4'46",hr:177,time:'23:56',type:'tt'},
+  '2026-03-05':{km:7.85,pace:"6'20",hr:152,time:'49:42',type:'easy'},
+  '2026-03-07':{km:0.8,pace:"4'05",hr:181,time:'3:16',type:'interval'},
+  '2026-03-09':{km:5.63,pace:"6'28",hr:150,time:'36:26',type:'recovery'},
+  '2026-03-11':{km:12.08,pace:"5'40",hr:166,time:'1:08:35',type:'tempo'},
+  '2026-03-15':{km:5.18,pace:"6'15",hr:153,time:'32:25',type:'easy'},
+  '2026-03-17':{km:5.01,pace:"4'51",hr:174,time:'24:18',type:'tt'},
+  '2026-03-19':{km:8.35,pace:"6'10",hr:156,time:'51:34',type:'easy'},
+  '2026-03-22':{km:21.27,pace:"5'14",hr:158,time:'1:51:23',type:'long'},
+  '2026-03-25':{km:5.55,pace:"6'32",hr:149,time:'36:17',type:'recovery'},
+  '2026-03-28':{km:3.3,pace:"4'58",hr:170,time:'16:25',type:'tt'},
+};
+
+const TODAY = {y:2026,m:3,d:30};
+let calY=2026, calM=3;
+
+function dispKm(km){return km<1?km.toFixed(1):Math.round(km)}
+
+function renderCal(y,m){
+  const grid=document.getElementById('cal-grid');
+  const fd=new Date(y,m-1,1).getDay();
+  const dim=new Date(y,m,0).getDate();
+  const off=fd===0?6:fd-1;
+  let h='';
+  for(let i=0;i<off;i++) h+='<div class="cal-cell"></div>';
+  for(let d=1;d<=dim;d++){
+    const ds=y+'-'+String(m).padStart(2,'0')+'-'+String(d).padStart(2,'0');
+    const run=D[ds];
+    const isFut=(y>TODAY.y)||(y===TODAY.y&&m>TODAY.m)||(y===TODAY.y&&m===TODAY.m&&d>TODAY.d);
+    if(run){
+      const s=TS[run.type]||TS.easy;
+      const num=dispKm(run.km);
+      const fs=String(num).length>2?'44%':num>=10?'52%':'60%';
+      h+=`<div class="cal-cell has-run" onclick="switchScreen('detail')">
+        <svg viewBox="0 0 50 50" width="100%" height="100%">
+          <circle cx="25" cy="25" r="24" fill="${s.fill}"/>
+          ${s.to>0?`<text x="25" y="25.5" text-anchor="middle" dominant-baseline="central" fill="${s.tc}" font-size="${fs}" font-weight="800" opacity="${s.to}">${num}</text>`:''}
+        </svg>
+      </div>`;
+    } else {
+      const op=isFut?0.06:0.15;
+      h+=`<div class="cal-cell">
+        <svg viewBox="0 0 50 50" width="100%" height="100%">
+          <circle cx="25" cy="25" r="24" fill="none" stroke="rgba(0,0,0,${op})" stroke-width="1.2"/>
+        </svg>
+      </div>`;
+    }
+  }
+  grid.innerHTML=h;
+  document.getElementById('cal-mname').textContent=MNAMES[m-1];
+  document.getElementById('cal-yname').textContent=y;
+  const key=y+'-'+String(m).padStart(2,'0');
+  const mt=MMETA[key];
+  document.getElementById('cs-km').textContent=mt?mt.km:'—';
+}
+
+function calNav(dir){
+  calM+=dir;
+  if(calM<1){calM=12;calY--}
+  if(calM>12){calM=1;calY++}
+  renderCal(calY,calM);
+}
+
+function renderList(){
+  const runs=[
+    {ds:'2026-03-28',label:'MAR 28'},{ds:'2026-03-25',label:'MAR 25'},
+    {ds:'2026-03-22',label:'MAR 22'},{ds:'2026-03-19',label:'MAR 19'},
+    {ds:'2026-03-17',label:'MAR 17'},{ds:'2026-03-15',label:'MAR 15'},
+    {ds:'2026-03-11',label:'MAR 11'},{ds:'2026-03-09',label:'MAR 09'},
+    {ds:'2026-03-07',label:'MAR 07'},{ds:'2026-03-05',label:'MAR 05'},
+    {ds:'2026-03-03',label:'MAR 03'},{ds:'2026-03-01',label:'MAR 01'},
+  ];
+  let h='';
+  runs.forEach(r=>{
+    const run=D[r.ds];if(!run)return;
+    const tp=run.type||'easy';
+    const s=TS[tp];
+    const num=dispKm(run.km);
+    const fs=String(num).length>2?9:num>=10?10:12;
+    const badge=TYPE_LABELS[tp]?`<span class="ri-badge">${TYPE_LABELS[tp]}</span>`:'';
+    h+=`<div class="run-item" onclick="switchScreen('detail')">
+      <div class="ri-dot"><svg width="40" height="40"><circle cx="20" cy="20" r="16" fill="${s.fill}"/>${s.to>0?`<text x="20" y="20.5" text-anchor="middle" dominant-baseline="central" fill="${s.tc}" font-size="${fs}" font-weight="800" opacity="${s.to}">${num}</text>`:''}</svg></div>
+      <div class="ri-body">
+        <div class="ri-date">${r.label}</div>
+        <div class="ri-km">${run.km.toFixed(2)}<span> km</span></div>
+        <div class="ri-meta"><span class="ri-pace">${run.pace}/km</span><span class="ri-sep"></span><span class="ri-time">${run.time}</span><span class="ri-sep"></span><span class="ri-hr">♡ ${run.hr}</span></div>
+      </div>
+      ${badge}
+    </div>`;
+  });
+  document.getElementById('list-runs').innerHTML=h;
+}
+
+function switchScreen(name){
+  document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
+  document.getElementById('screen-'+name).classList.add('active');
+}
+
+function switchGTab(t){
+  document.getElementById('gv-w').style.display=t==='w'?'block':'none';
+  document.getElementById('gv-m').style.display=t==='m'?'block':'none';
+  document.getElementById('gt-w').className='gtab'+(t==='w'?' active':'');
+  document.getElementById('gt-m').className='gtab'+(t==='m'?' active':'');
+}
+
+renderCal(calY, calM);
+renderList();
+</script>
+</body>
+</html>
